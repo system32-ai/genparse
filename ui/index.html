@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>genparse</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #fafafa; --fg: #111; --dim: #777; --line: #ddd; --accent: #111; --err: #b00020;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0e0e0e; --fg: #e6e6e6; --dim: #808080; --line: #2a2a2a; --accent: #e6e6e6; --err: #ff6b6b; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); }
+  body { font: 13px/1.6 "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 20px 64px; display: flex; flex-direction: column; gap: 24px; }
+  h1 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .02em; }
+  h1 span { color: var(--dim); font-weight: 400; margin-left: 12px; }
+  .zone { border: 1px dashed var(--line); padding: 28px 16px; text-align: center; color: var(--dim); cursor: pointer; outline: none; }
+  .zone:hover, .zone:focus-visible, .zone.over { border-color: var(--fg); color: var(--fg); }
+  .zone.has { border-style: solid; color: var(--fg); }
+  .zone .size { color: var(--dim); }
+  label.sec { display: flex; justify-content: space-between; color: var(--dim); }
+  label.sec button { color: var(--dim); }
+  label.sec button:hover { color: var(--fg); }
+  textarea { width: 100%; min-height: 240px; resize: vertical; margin-top: 6px; padding: 12px; border: 1px solid var(--line); border-radius: 0;
+    background: transparent; color: var(--fg); font: inherit; outline: none; }
+  textarea:focus { border-color: var(--fg); }
+  .row { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+  .row label { display: flex; gap: 8px; align-items: center; color: var(--dim); }
+  select { font: inherit; color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 0; padding: 5px 8px; }
+  input[type=checkbox] { accent-color: var(--accent); margin: 0; }
+  button { font: inherit; background: none; border: none; padding: 0; color: var(--fg); cursor: pointer; }
+  button.go { margin-left: auto; border: 1px solid var(--fg); padding: 6px 18px; font-weight: 500; }
+  button.go:hover { background: var(--fg); color: var(--bg); }
+  button.go:disabled { opacity: .5; cursor: progress; }
+  .result { border-top: 1px solid var(--line); padding-top: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .meta { display: flex; gap: 16px; color: var(--dim); min-height: 1.6em; flex-wrap: wrap; }
+  .meta button { color: var(--dim); margin-left: auto; }
+  .meta button:hover { color: var(--fg); }
+  pre { margin: 0; white-space: pre-wrap; word-break: break-word; font: inherit; }
+  pre.empty { color: var(--dim); }
+  .err { color: var(--err); }
+  .k { color: var(--fg); font-weight: 500; } .s, .n, .b { color: var(--fg); } .z { color: var(--dim); }
+  .punct { color: var(--dim); }
+</style>
+</head>
+<body>
+<main>
+  <h1>genparse<span>document → json</span></h1>
+
+  <div id="zone" class="zone" tabindex="0" role="button" aria-label="Choose a document">
+    drop a pdf / xlsx / docx here, or click to browse
+    <input id="file" type="file" hidden accept=".pdf,.xlsx,.xlsm,.xlsb,.xls,.ods,.docx,application/pdf">
+  </div>
+
+  <div>
+    <label class="sec" for="schema">fields to extract (json template or json schema)
+      <button id="example" type="button">load example</button>
+    </label>
+    <textarea id="schema" spellcheck="false"></textarea>
+  </div>
+
+  <div class="row">
+    <label for="model">model <select id="model"><option value="">default</option></select></label>
+    <label><input type="checkbox" id="nocache"> skip cache</label>
+    <button class="go" id="go" type="button">extract</button>
+  </div>
+  <div class="err" id="formerr"></div>
+
+  <div class="result">
+    <div class="meta" id="meta"><button id="copy" type="button" hidden>copy</button></div>
+    <pre id="out" class="empty">result appears here</pre>
+    <div class="err" id="resulterr"></div>
+  </div>
+</main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const zone = $('zone'), fileInput = $('file'), schema = $('schema'), model = $('model');
+  const go = $('go'), out = $('out'), meta = $('meta'), copy = $('copy');
+  let file = null;
+
+  const EXAMPLE = {
+    invoice_number: "string: the invoice identifier",
+    issue_date: "date",
+    due_date: "date",
+    vendor: { name: "", vat_id: "", address: "" },
+    customer: { name: "", address: "" },
+    currency: "string: ISO 4217 code",
+    subtotal: 0.0, tax: 0.0, total: 0.0, paid: false,
+    line_items: [{ description: "", quantity: 0, unit_price: 0.0, amount: 0.0 }]
+  };
+  $('example').onclick = () => { schema.value = JSON.stringify(EXAMPLE, null, 2); $('formerr').textContent = ''; };
+  try { schema.value = localStorage.getItem('genparse.schema') || ''; } catch {}
+  if (!schema.value) schema.value = JSON.stringify(EXAMPLE, null, 2);
+
+  fetch('/models').then(r => r.json()).then(({ aliases, default: def }) => {
+    model.innerHTML = '';
+    const d = document.createElement('option');
+    d.value = ''; d.textContent = `default (${def})`;
+    model.appendChild(d);
+    for (const { alias, target } of aliases) {
+      const o = document.createElement('option');
+      o.value = alias; o.textContent = `${alias} · ${target}`;
+      model.appendChild(o);
+    }
+  }).catch(() => {});
+
+  function setFile(f) {
+    if (!f) return;
+    file = f;
+    const kb = f.size / 1024;
+    const size = kb > 1024 ? (kb / 1024).toFixed(1) + ' MB' : Math.ceil(kb) + ' KB';
+    zone.classList.add('has');
+    zone.textContent = f.name + ' ';
+    const s = document.createElement('span'); s.className = 'size'; s.textContent = `(${size})`;
+    zone.appendChild(s); zone.appendChild(fileInput);
+    $('formerr').textContent = '';
+  }
+  zone.onclick = () => fileInput.click();
+  zone.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } };
+  fileInput.onchange = () => setFile(fileInput.files[0]);
+  const over = (e) => { e.preventDefault(); zone.classList.add('over'); };
+  const leave = (e) => { e.preventDefault(); zone.classList.remove('over'); };
+  zone.addEventListener('dragenter', over);
+  zone.addEventListener('dragover', over);
+  zone.addEventListener('dragleave', leave);
+  zone.addEventListener('drop', (e) => { leave(e); setFile(e.dataTransfer.files[0]); });
+  document.addEventListener('dragover', (e) => e.preventDefault());
+  document.addEventListener('drop', (e) => e.preventDefault());
+
+  go.onclick = async () => {
+    $('formerr').textContent = ''; $('resulterr').textContent = '';
+    if (!file) { $('formerr').textContent = 'choose a document first'; return; }
+    let parsed;
+    try { parsed = JSON.parse(schema.value); } catch (e) { $('formerr').textContent = 'schema is not valid json: ' + e.message; return; }
+    if (typeof parsed !== 'object' || Array.isArray(parsed) || parsed === null) { $('formerr').textContent = 'schema must be a json object'; return; }
+    try { localStorage.setItem('genparse.schema', schema.value); } catch {}
+
+    const fd = new FormData();
+    fd.append('file', file, file.name);
+    fd.append('schema', JSON.stringify(parsed));
+    if (model.value) fd.append('model', model.value);
+    if ($('nocache').checked) fd.append('nocache', '1');
+
+    go.disabled = true; go.textContent = 'extracting…';
+    clearMeta(); copy.hidden = true;
+    out.className = 'empty'; out.textContent = 'waiting for the model…';
+    const t0 = performance.now();
+    try {
+      const res = await fetch('/parse', { method: 'POST', body: fd });
+      const secs = ((performance.now() - t0) / 1000).toFixed(1);
+      const body = await res.json().catch(() => ({ error: 'response was not json' }));
+      if (!res.ok) {
+        out.className = 'empty'; out.textContent = 'no result';
+        $('resulterr').textContent = `http ${res.status}${body.kind ? ' · ' + body.kind : ''}: ${body.error || ''}`;
+        return;
+      }
+      tag(res.headers.get('x-genparse-model'));
+      tag(res.headers.get('x-genparse-file-type'));
+      const cache = res.headers.get('x-genparse-cache');
+      tag(cache && `cache ${cache}`);
+      tag(`${secs}s`);
+      const text = JSON.stringify(body, null, 2);
+      out.className = ''; out.innerHTML = highlight(text);
+      copy.hidden = false;
+      copy.onclick = () => navigator.clipboard.writeText(text).then(() => { copy.textContent = 'copied'; setTimeout(() => copy.textContent = 'copy', 1200); });
+    } catch (e) {
+      out.className = 'empty'; out.textContent = 'no result';
+      $('resulterr').textContent = 'request failed: ' + e.message;
+    } finally {
+      go.disabled = false; go.textContent = 'extract';
+    }
+  };
+
+  function clearMeta() { for (const n of [...meta.childNodes]) if (n !== copy) n.remove(); }
+  function tag(text) {
+    if (!text) return;
+    const s = document.createElement('span'); s.textContent = text;
+    meta.insertBefore(s, copy);
+  }
+  function escapeHtml(s) { return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+  function highlight(json) {
+    return escapeHtml(json).replace(/("(\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?|[{}\[\],])/g, (m) => {
+      let cls = 'n';
+      if (m[0] === '"') cls = /:$/.test(m) ? 'k' : 's';
+      else if (m === 'null') cls = 'z';
+      else if (m === 'true' || m === 'false') cls = 'b';
+      else if (/^[{}\[\],]$/.test(m)) cls = 'punct';
+      return `<span class="${cls}">${m}</span>`;
+    });
+  }
+})();
+</script>
+</body>
+</html>

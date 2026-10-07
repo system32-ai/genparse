@@ -1,0 +1,27 @@
+{
+  "invoice_number": "string: the invoice identifier",
+  "issue_date": "date",
+  "due_date": "date",
+  "vendor": {
+    "name": "",
+    "vat_id": "",
+    "address": ""
+  },
+  "customer": {
+    "name": "",
+    "address": ""
+  },
+  "currency": "string: ISO 4217 code",
+  "subtotal": 0.0,
+  "tax": 0.0,
+  "total": 0.0,
+  "paid": false,
+  "line_items": [
+    {
+      "description": "",
+      "quantity": 0,
+      "unit_price": 0.0,
+      "amount": 0.0
+    }
+  ]
+}

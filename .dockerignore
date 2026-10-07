@@ -1,0 +1,7 @@
+target
+.genparse-cache
+.env
+.git
+assets
+README.md
+Makefile
