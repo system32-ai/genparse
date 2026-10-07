@@ -8,7 +8,7 @@ Upload a PDF, spreadsheet or Word file, say which fields you want as JSON, and g
 One small Rust binary: an HTTP service, a browser UI and a CLI. It talks to each model's REST API directly, no SDKs.
 
 - **Inputs:** PDF, XLSX/XLS/ODS, DOCX
-- **Models:** Claude Haiku/Sonnet, GPT Luna/Nano, Gemini Flash, DeepSeek Flash, GLM Flash (Z.ai), MiMo Flash (Xiaomi)
+- **Models:** Claude Haiku/Sonnet/Opus/Fable, GPT Luna/Nano, Gemini Flash, DeepSeek Flash, GLM Flash (Z.ai), MiMo Flash (Xiaomi)
 - **Output:** your JSON template or JSON Schema, filled, with the shape enforced by the provider's structured-output mode
 - **Cache:** results keyed by file hash + model + schema, on disk, so re-uploads are instant
 

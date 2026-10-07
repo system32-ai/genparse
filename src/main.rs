@@ -19,7 +19,7 @@ use crate::{
 };
 
 /// genparse: fill a JSON template with values extracted from a PDF, spreadsheet
-/// or Word document, using the model of your choice (Gemini Flash, OpenAI Luna/Nano, Claude Haiku/Sonnet).
+/// or Word document, using the model of your choice (Gemini Flash, OpenAI Luna/Nano, Claude Haiku/Sonnet/Opus/Fable).
 #[derive(Parser)]
 #[command(version, about)]
 struct Cli {

@@ -68,7 +68,7 @@ pub struct AnthropicConfig {
     pub api_key_env: String,
     pub base_url: String,
     /// Opt into Anthropic's server-side refusal fallback (`fallbacks: "default"`).
-    /// Only sent for models that support it (not Haiku).
+    /// Only sent for models that support it (Sonnet/Opus/Fable, not Haiku).
     pub fallbacks: bool,
 }
 
@@ -131,6 +131,8 @@ impl Default for Config {
             ("nano", "openai:gpt-5-nano"),
             ("haiku", "anthropic:claude-haiku-5-5"),
             ("sonnet", "anthropic:claude-sonnet-5-5"),
+            ("opus", "anthropic:claude-opus-5-5"),
+            ("fable", "anthropic:claude-fable-5-1"),
             ("deepseek-flash", "deepseek:deepseek-v4-flash"),
             ("glm-flash", "zai:glm-4.7-flash"),
             ("mimo-flash", "xiaomi:mimo-v2.6-flash"),
@@ -453,6 +455,10 @@ mod tests {
         assert_eq!(m("gemini-flash-lite"), "gemini:gemini-3.5-flash-lite");
         assert_eq!(m("claude-haiku"), "anthropic:claude-haiku-5-5");
         assert_eq!(m("claude_sonnet_5.5"), "anthropic:claude-sonnet-5-5");
+        assert_eq!(m("opus"), "anthropic:claude-opus-5-5");
+        assert_eq!(m("claude-opus-5.5"), "anthropic:claude-opus-5-5");
+        assert_eq!(m("fable"), "anthropic:claude-fable-5-1");
+        assert_eq!(m("claude-fable"), "anthropic:claude-fable-5-1");
         assert_eq!(m("gpt-nano"), "openai:gpt-5-nano");
         assert_eq!(m("xiaomi"), "xiaomi:mimo-v2.6-flash");
         assert_eq!(m("glm"), "zai:glm-4.7-flash");
